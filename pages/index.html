@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="{{theme}}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Logs</title>
+
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@5" rel="stylesheet" type="text/css" />
+	<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+	<link href="https://cdn.jsdelivr.net/npm/daisyui@5/themes.css" rel="stylesheet" type="text/css" />
+
+	<style>
+		.details {
+			overflow: hidden;
+			display: -webkit-box;
+			-webkit-line-clamp: 1;
+					line-clamp: 1;
+			-webkit-box-orient: vertical;
+		}
+
+        .backdrop-blur {
+            backdrop-filter: blur(3px);
+        }
+
+        #insert-data-modal {
+            max-height: 100vh;
+            overflow-y: auto;
+        }
+
+        pre {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+        }
+	</style>
+
+    <script>
+        function buildStatusBadge(status) {
+            const statusClass = status >= 200 && status < 300 ? "badge-success" :
+                status >= 300 && status < 400 ? "badge-warning" :
+                status >= 400 ? "badge-error" : "badge-neutral";
+
+            return `
+                <div class="flex items-center badge badge-neutral badge-lg ${statusClass}">
+                    <span>${status}</span>
+                </div>
+            `;
+        }
+
+        function buildSingleLogDetail(title, detail, pre = false) {
+            const tag = pre ? "pre" : "div";
+
+            return `
+                <div class="p-4 space-y-4">
+                    <div class="flex items-center space-x-2">
+                        <label for="table-name" class="w-1/2 font-bold">${title}</label>
+                    </div>
+                    <${tag} class="border border-primary p-2 rounded-xl ${pre ? "text-sm overflow-auto" : ""}">${detail}</${tag}>
+                </div>
+            `;
+        }
+
+        function buildSingleLog(log) {
+            const date = new Date(log.timestamp);
+
+            return `
+                <tr class="border-t border-t-slate-500 hover:bg-base-300 hover:shadow-lg hover:cursor-pointer" onclick='openModal(${JSON.stringify(log)})'>
+                    <td class="p-2"><div class="badge badge-neutral badge-lg">${log.action}</div></td>
+                    <td class="p-2"><span>${log.url}</span></td>
+                    <td class="p-2"><span>${date.toLocaleString()}</span></td>
+                    <td class="p-2">${buildStatusBadge(log.status)}</td>
+                    <td class="p-2"><span>${log.latency}ms</span></td>
+                </tr>
+            `;
+        }
+
+        function closeModal() {
+            const panel = document.getElementById("modal-panel");
+            const backdrop = document.getElementById("modal-backdrop");
+
+            panel.classList.add("translate-x-full");
+            backdrop.classList.add("hidden");
+        }
+
+        function openModal(log) {
+            const panel = document.getElementById("modal-panel");
+            const backdrop = document.getElementById("modal-backdrop");
+            const content = document.getElementById("modal-content");
+
+            content.innerHTML = `
+                ${buildSingleLogDetail("Action", log.action)}
+                ${buildSingleLogDetail("Url", log.url)}
+                ${buildSingleLogDetail("Details", log.details, true)}
+
+                <div class="p-4 space-y-4">
+                    <div class="flex items-center space-x-2">
+                        <label for="table-name" class="w-1/4 font-bold">Status</label>
+                        ${buildStatusBadge(log.status)}
+                    </div>
+                </div>
+
+                <div class="divider"></div>
+                ${buildSingleLogDetail("ID", log.id)}
+                ${buildSingleLogDetail("Timestamp", log.timestamp)}
+                ${buildSingleLogDetail("user ip address", log.ip_address)}
+                ${buildSingleLogDetail("Latency", log.latency + "ms")}
+                ${buildSingleLogDetail("UserAgent", log.user_agent)}
+            `;
+
+            backdrop.classList.remove("hidden");
+            panel.classList.remove("translate-x-full");
+
+            backdrop.onclick = closeModal;
+        }
+
+        window.addEventListener("DOMContentLoaded", () => {
+            fetch("{{logsRoute}}/all")
+                .then(response => {
+                    if (response.status === 401) {
+                        // Redirige vers la page de login
+                        window.location.href = "{{logsRoute}}/auth";
+                        return;
+                    }
+
+                    if (!response.ok) throw new Error("Failed to fetch logs");
+
+                    return response.json();
+                })
+                .then(logs => {
+                    if (!logs) return; // Si on a redirigé, on ne fait rien
+
+                    const loader = document.getElementById("loader");
+                    const logsTable = document.getElementById("logsTBody");
+
+                    loader.style.display = "none";
+
+                    if (!logs.length) {
+                        logsTable.innerHTML = `<tr><td colspan="5" class="text-center">No logs to show yet</td></tr>`;
+                        return;
+                    }
+
+                    logsTable.innerHTML = logs.map(log => buildSingleLog(log)).join("");
+                })
+                .catch(error => {
+                    const loader = document.getElementById("loader");
+                    loader.style.display = "none";
+
+                    const logsTable = document.getElementById("logsTBody");
+                    logsTable.innerHTML = `<tr><td colspan="5" class="text-center">Error fetching logs</td></tr>`;
+
+                    console.error("Error fetching logs:", error);
+                });
+        });
+
+    </script>
+</head>
+
+<body>
+    <main class="min-h-screen h-full flex w-full p-4">
+        <table id="logsTable" class="table-auto w-full h-fit text-left rtl:text-right">
+            <thead class="uppercase font-bold">
+                <tr class="border-t border-t-slate-500">
+                    <th class="p-2">
+                        <span>Action</span>
+                    </th>
+                    <th class="p-2">
+                        <span>Url</span>
+                    </th>
+                    <th class="p-2">
+                        <span>Timestamp</span>
+                    </th>
+                    <th class="p-2">
+                        <span>Status</span>
+                    </th>
+                    <th class="p-2">
+                        <span>Response time</span>
+                    </th>
+                </tr>
+            </thead>
+            <tbody id="logsTBody">
+                <tr id="loader"><td colspan="5" class="text-center"><span class="loading loading-spinner loading-xl"></span></td></tr>
+            </tbody>
+        </table>
+    </main>
+
+    <!-- Modal Backdrop -->
+    <div id="modal-backdrop" class="fixed inset-0 bg-black bg-opacity-50 backdrop-blur z-40 hidden"></div>
+
+    <!-- Modal Panel -->
+    <aside id="modal-panel"
+        class="fixed top-0 right-0 w-full sm:w-1/2 h-full bg-base-100 shadow-lg z-50 transform translate-x-full transition-transform duration-300 overflow-y-auto">
+        <div class="p-4 flex justify-between items-center border-b border-base-300">
+            <h2 class="text-2xl font-bold">Full Logs Details</h2>
+            <button class="btn btn-sm btn-circle" onclick="closeModal()">✕</button>
+        </div>
+        <div id="modal-content" class="p-4 space-y-4">
+            <!-- Filled dynamically -->
+        </div>
+    </aside>
+</body>
+</html>
