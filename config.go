@@ -70,7 +70,8 @@ type Config struct {
 
 	// Theme define the theme of the logs view
 	//
-	// Optional. Default: "dark"
+	// Optional. Default: ThemeConfig.Dark
+	// (see https://daisyui.com/theme-generator/)
 	Theme string
 
 	// JwtSigningMethod define the signing method to use for the JWT token
@@ -101,7 +102,7 @@ var configDefault = Config{
 	Password:                "password",
 	JwtSecret:               "secret",
 	JwtExpireTime:           3600,
-	Theme:                   "dark",
+	Theme:                   Theme.Dark,
 	JwtSigningMethod:        jwt.SigningMethodHS256,
 	AuthTokenCookieName:     "auth_token",
 	IncludeLogPageConnexion: ptr(true),
