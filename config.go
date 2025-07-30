@@ -40,7 +40,7 @@ type Config struct {
 	// Optional. Default: ""
 	ExcludeParam string
 
-	// LogDetailMember define the member name that will be used to store the log details in the fiber.Ctx local
+	// LogDetailMember define the member name that will be used to store the log details in the request context
 	//
 	// Optional. Default: "logDetail"
 	LogDetailMember string

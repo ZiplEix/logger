@@ -16,8 +16,6 @@ Logger is a Go package that provides a middleware for the standard `net/http` li
 
 ## Installation
 
-To use Logger in your GoFiber project, add it to your dependencies:
-
 ```bash
 go get github.com/ZiplEix/logger
 ```
