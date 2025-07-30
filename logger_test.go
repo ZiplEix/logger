@@ -2,19 +2,17 @@ package logger
 
 import (
 	"database/sql"
+	"net/http"
 	"os"
 	"testing"
-
-	"github.com/gofiber/fiber/v2"
 )
 
-func TestSetup(t *testing.T) {
+func TestSetupHTTP(t *testing.T) {
 	tmpDir := t.TempDir()
 	dbPath := tmpDir + "/test.db"
 
-	app := fiber.New()
-
-	Setup(app, Config{
+	mux := http.NewServeMux()
+	Setup(mux, Config{
 		DatabasePath: dbPath,
 	})
 

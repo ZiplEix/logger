@@ -3,7 +3,7 @@ package logger
 import (
 	"database/sql"
 	"fmt"
-	"log"
+	"net/http"
 	"strings"
 	"time"
 
@@ -86,28 +86,29 @@ func loggerAuth(c *fiber.Ctx) error {
 	return c.Next()
 }
 
-func Setup(app *fiber.App, config Config) {
-	cfg = defaultConfig(config)
+func authMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == cfg.Path+"/auth" {
+			next.ServeHTTP(w, r)
+			return
+		}
 
-	err := initDb(cfg)
-	if err != nil {
-		log.Fatalf("failed to initialize database: %v", err)
-		return
-	}
+		cookie, err := r.Cookie(cfg.AuthTokenCookieName)
+		if err != nil {
+			http.Redirect(w, r, cfg.Path+"/auth", http.StatusSeeOther)
+			return
+		}
 
-	var logsGroup fiber.Router
-	if *cfg.SecureByPassword {
-		logsGroup = app.Group(cfg.Path, loggerAuth)
-	} else {
-		logsGroup = app.Group(cfg.Path)
-	}
+		ok, err := verifyToken(cookie.Value)
+		if err != nil || !ok {
+			http.Redirect(w, r, cfg.Path+"/auth", http.StatusSeeOther)
+			return
+		}
 
-	logsGroup.Get("/", renderPage)
-	logsGroup.Get("/all", getAllLogs)
-	logsGroup.Get("/auth", authPage)
-	logsGroup.Post("/auth", auth)
+		next.ServeHTTP(w, r)
+	})
 }
 
-func New() fiber.Handler {
+func New() func(http.Handler) http.Handler {
 	return middleware
 }

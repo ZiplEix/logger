@@ -2,27 +2,27 @@ package main
 
 import (
 	"github.com/ZiplEix/logger"
-	"github.com/gofiber/fiber/v2"
+	"github.com/labstack/echo/v4"
 )
 
 func main() {
-	app := fiber.New()
+	e := echo.New()
 
-	app.Use(logger.New())
+	e.Use(echo.WrapMiddleware(logger.New()))
 
-	app.Get("/", func(c *fiber.Ctx) error {
-		return c.SendString("Hello, World!")
+	e.GET("/", func(c echo.Context) error {
+		return c.String(200, "Hello, World!")
 	})
 
-	app.Get("/log", func(c *fiber.Ctx) error {
+	e.GET("/log", func(c echo.Context) error {
 		logs, err := logger.GetAllLogs()
 		if err != nil {
-			return c.SendString("Error retrieving logs " + err.Error())
+			return c.String(500, "Error retrieving logs: "+err.Error())
 		}
-		return c.JSON(logs)
+		return c.JSON(200, logs)
 	})
 
-	logger.Setup(app, logger.Config{})
+	logger.SetupEcho(e, logger.Config{})
 
-	app.Listen(":8080")
+	e.Logger.Fatal(e.Start(":8080"))
 }

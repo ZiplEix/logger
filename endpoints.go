@@ -2,10 +2,11 @@ package logger
 
 import (
 	"embed"
+	"encoding/json"
+	"log"
+	"net/http"
 	"strings"
 	"time"
-
-	"github.com/gofiber/fiber/v2"
 )
 
 //go:embed pages/*.html
@@ -18,59 +19,91 @@ func formatPage(rawPage string) string {
 	return page
 }
 
-func authPage(c *fiber.Ctx) error {
+func authPage(w http.ResponseWriter, r *http.Request) {
 	pageContent, err := logsPageFS.ReadFile("pages/auth.html")
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).SendString("Internal server error:\nError reading page template: " + err.Error())
+		http.Error(
+			w,
+			"Internal server error:\nError reading page template: "+err.Error(),
+			http.StatusInternalServerError,
+		)
+		return
 	}
 
 	page := formatPage(string(pageContent))
 
-	c.Set("Content-Type", "text/html; charset=utf-8")
-	return c.SendString(page)
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if _, err := w.Write([]byte(page)); err != nil {
+		log.Printf("failed to write auth page: %v", err)
+	}
 }
 
-func auth(c *fiber.Ctx) error {
-	password := c.FormValue("password")
+func auth(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Bad request", http.StatusBadRequest)
+		return
+	}
+	password := r.FormValue("password")
 
 	if password != cfg.Password {
-		return fiber.NewError(fiber.StatusUnauthorized, "Invalid password")
+		http.Error(w, "Invalid password", http.StatusUnauthorized)
+		return
 	}
 
 	token, err := generateToken()
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).SendString("Internal server error:\nError generating token: " + err.Error())
+		http.Error(
+			w,
+			"Internal server error:\nError generating token: "+err.Error(),
+			http.StatusInternalServerError,
+		)
+		return
 	}
 
-	c.Cookie(&fiber.Cookie{
+	http.SetCookie(w, &http.Cookie{
 		Name:     cfg.AuthTokenCookieName,
 		Value:    token,
 		Expires:  time.Now().Add(time.Second * time.Duration(cfg.JwtExpireTime)),
-		HTTPOnly: true,
+		HttpOnly: true,
+		Path:     cfg.Path,
 	})
 
-	c.Locals(cfg.LogDetailMember, "User connect to log view with password")
+	if rec, ok := w.(*responseRecorder); ok {
+		rec.details = ptr("User connect to log view with password")
+	}
 
-	return c.SendStatus(fiber.StatusOK)
+	w.WriteHeader(http.StatusOK)
 }
 
-func renderPage(c *fiber.Ctx) error {
+func renderPage(w http.ResponseWriter, r *http.Request) {
 	pageContent, err := logsPageFS.ReadFile("pages/index.html")
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).SendString("Internal server error:\nError reading page template: " + err.Error())
+		http.Error(
+			w,
+			"Internal server error:\nError reading page template: "+err.Error(),
+			http.StatusInternalServerError,
+		)
+		return
 	}
-
 	page := formatPage(string(pageContent))
-
-	c.Set("Content-Type", "text/html; charset=utf-8")
-	return c.SendString(page)
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if _, err := w.Write([]byte(page)); err != nil {
+		log.Printf("failed to write renderPageHTTP: %v", err)
+	}
 }
 
-func getAllLogs(c *fiber.Ctx) error {
+func getAllLogs(w http.ResponseWriter, r *http.Request) {
 	logs, err := GetAllLogs()
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).SendString("Internal server error:\nError retrieving logs: " + err.Error())
+		http.Error(
+			w,
+			"Internal server error:\nError retrieving logs: "+err.Error(),
+			http.StatusInternalServerError,
+		)
+		return
 	}
-
-	return c.JSON(logs)
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	if err := json.NewEncoder(w).Encode(logs); err != nil {
+		log.Printf("failed to encode logs JSON: %v", err)
+	}
 }

@@ -2,73 +2,79 @@ package logger
 
 import (
 	"log"
+	"net/http"
 	"strconv"
 	"time"
 
 	"slices"
 
 	"github.com/gobwas/glob"
-	"github.com/gofiber/fiber/v2"
 )
 
-func middleware(c *fiber.Ctx) error {
-	path := c.OriginalURL()
+type responseRecorder struct {
+	http.ResponseWriter
+	statusCode int
+	details    *string
+}
 
-	if slices.Contains(cfg.ExcludeRoutes, path) && !(*cfg.IncludeLogPageConnexion && path == cfg.Path+"/auth" && c.Method() == "POST") {
-		return c.Next()
-	}
+func (r *responseRecorder) WriteHeader(code int) {
+	r.statusCode = code
+	r.ResponseWriter.WriteHeader(code)
+}
 
-	for _, pattern := range cfg.ExcludePatterns {
-		g := glob.MustCompile(pattern)
-		if g.Match(path) && !(*cfg.IncludeLogPageConnexion && path == cfg.Path+"/auth" && c.Method() == "POST") {
-			return c.Next()
+func middleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+
+		skipAuthLog := *cfg.IncludeLogPageConnexion && path == "/auth" && r.Method == http.MethodPost
+
+		if slices.Contains(cfg.ExcludeRoutes, path) && !skipAuthLog {
+			next.ServeHTTP(w, r)
+			return
 		}
-	}
 
-	if cfg.ExcludeParam != "" && c.Query(cfg.ExcludeParam) != "" {
-		return c.Next()
-	}
+		for _, pattern := range cfg.ExcludePatterns {
+			g := glob.MustCompile(pattern)
+			if g.Match(path) && !skipAuthLog {
+				next.ServeHTTP(w, r)
+				return
+			}
+		}
+		if cfg.ExcludeParam != "" && r.URL.Query().Get(cfg.ExcludeParam) != "" {
+			next.ServeHTTP(w, r)
+			return
+		}
 
-	start := time.Now()
+		start := time.Now()
+		rec := &responseRecorder{ResponseWriter: w, statusCode: http.StatusOK}
 
-	err := c.Next()
+		next.ServeHTTP(rec, r)
 
-	latency := time.Since(start)
+		latency := time.Since(start)
 
-	var details *string
-	if c.Locals(cfg.LogDetailMember) != nil {
-		details = ptr(c.Locals(cfg.LogDetailMember).(string))
-	} else if err != nil {
-		details = ptr(err.Error())
-	} else {
-		details = ptr("OK")
-	}
-
-	status := c.Response().StatusCode()
-	if err != nil {
-		if fiberErr, ok := err.(*fiber.Error); ok {
-			status = fiberErr.Code
+		var details *string
+		if rec.details != nil {
+			details = rec.details
 		} else {
-			status = fiber.StatusInternalServerError
+			ok := "OK"
+			details = &ok
 		}
-	}
 
-	entry := LogEntry{
-		IPAddress: c.IP(),
-		Url:       c.OriginalURL(),
-		Action:    c.Method(),
-		Details:   details,
-		Timestamp: time.Now(),
-		UserAgent: ptr(c.Get("User-Agent")),
-		Status:    ptr(strconv.Itoa(status)),
-		Latency:   int64(latency.Milliseconds()),
-	}
+		entry := LogEntry{
+			IPAddress: r.RemoteAddr,
+			Url:       r.URL.RequestURI(),
+			Action:    r.Method,
+			Details:   details,
+			Timestamp: time.Now(),
+			UserAgent: ptr(r.UserAgent()),
+			Status:    ptr(strconv.Itoa(rec.statusCode)),
+			Latency:   int64(latency.Milliseconds()),
+		}
 
-	select {
-	case logQueue <- entry:
-	default:
-		log.Printf("log queue is full, dropping log: %+v", entry)
-	}
-
-	return err
+		select {
+		case logQueue <- entry:
+		default:
+			log.Printf("log queue is full, dropping log: %+v", entry)
+		}
+	})
 }
