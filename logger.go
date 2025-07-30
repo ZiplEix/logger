@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gofiber/fiber/v2"
 	_ "modernc.org/sqlite"
 )
 
@@ -69,21 +68,6 @@ func initDb(config Config) error {
 	startLoggerWorker(config.WorkerBufferSize)
 
 	return nil
-}
-
-func loggerAuth(c *fiber.Ctx) error {
-	if strings.HasPrefix(c.Path(), cfg.Path+"/auth") {
-		return c.Next()
-	}
-
-	tokenString := c.Cookies(cfg.AuthTokenCookieName)
-
-	ok, err := verifyToken(tokenString)
-	if err != nil || !ok {
-		return c.Status(fiber.StatusUnauthorized).Redirect(cfg.Path + "/auth")
-	}
-
-	return c.Next()
 }
 
 func authMiddleware(next http.Handler) http.Handler {
