@@ -1,4 +1,4 @@
-module github.com/ZiplEix/logger
+module github.com/ZiplEix/logger/v2
 
 go 1.23.1
 
