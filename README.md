@@ -17,7 +17,7 @@ Logger is a Go package that provides a middleware for the standard `net/http` li
 ## Installation
 
 ```bash
-go get github.com/ZiplEix/logger
+go get github.com/ZiplEix/logger/v2
 ```
 
 ---
@@ -33,7 +33,7 @@ import (
     "log"
     "net/http"
 
-    "github.com/ZiplEix/logger"
+    "github.com/ZiplEix/logger/v2"
 )
 
 func main() {
@@ -65,7 +65,7 @@ func main() {
 package main
 
 import (
-	"github.com/ZiplEix/logger"
+	"github.com/ZiplEix/logger/v2"
 	"github.com/labstack/echo/v4"
 )
 

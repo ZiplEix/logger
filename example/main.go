@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/ZiplEix/logger"
+	"github.com/ZiplEix/logger/v2"
 	"github.com/labstack/echo/v4"
 )
 
